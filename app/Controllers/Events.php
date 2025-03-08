@@ -201,17 +201,16 @@ class Events extends Security_Controller {
             "no_of_cycles" => $no_of_cycles ? $no_of_cycles : 0,
             "client_id" => $client_id ? $client_id : 0,
             "type" => $type ? $type : "event",
-            "task_id" => get_only_numeric_value($this->request->getPost('task_id')),
-            "project_id" => get_only_numeric_value($this->request->getPost('project_id')),
-            "lead_id" => get_only_numeric_value($this->request->getPost('lead_id')),
-            "ticket_id" => get_only_numeric_value($this->request->getPost('ticket_id')),
-            "proposal_id" => get_only_numeric_value($this->request->getPost('proposal_id')),
-            "contract_id" => get_only_numeric_value($this->request->getPost('contract_id')),
-            "subscription_id" => get_only_numeric_value($this->request->getPost('subscription_id')),
-            "invoice_id" => get_only_numeric_value($this->request->getPost('invoice_id')),
-            "order_id" => get_only_numeric_value($this->request->getPost('order_id')),
-            "estimate_id" => get_only_numeric_value($this->request->getPost('estimate_id')),
-            "related_user_id" => get_only_numeric_value($this->request->getPost('related_user_id')),
+            "task_id" => $this->request->getPost('task_id'),
+            "project_id" => $this->request->getPost('project_id'),
+            "lead_id" => $this->request->getPost('lead_id'),
+            "ticket_id" => $this->request->getPost('ticket_id'),
+            "proposal_id" => $this->request->getPost('proposal_id'),
+            "contract_id" => $this->request->getPost('contract_id'),
+            "subscription_id" => $this->request->getPost('subscription_id'),
+            "invoice_id" => $this->request->getPost('invoice_id'),
+            "order_id" => $this->request->getPost('order_id'),
+            "estimate_id" => $this->request->getPost('estimate_id'),
         );
 
         if ($end_date) {
@@ -262,8 +261,9 @@ class Events extends Security_Controller {
             $new_files = update_saved_files($timeline_file_path, $event_info->files, $new_files);
         }
 
-        $data = clean_data($data);
         $data["files"] = serialize($new_files);
+
+        $data = clean_data($data);
 
         $save_id = $this->Events_model->ci_save($data, $id);
         if ($save_id) {
@@ -442,13 +442,13 @@ class Events extends Security_Controller {
             $options = array(
                 "start_date" => $start,
                 "deadline" => $end,
+                "project_status" => 1,
                 "show_assigned_tasks_only_user_id" => $this->show_assigned_tasks_only_user_id(),
                 "for_events" => true
             );
 
-            //for non-admin users, show only the assigned tasks
-            if (!$this->login_user->is_admin) {
-                $options["show_assigned_tasks_only_user_id"] =  $this->login_user->id;
+            if (!$this->can_manage_all_projects()) {
+                $options["project_member_id"] = $this->login_user->id; //don't show all tasks to non-admin users
             }
 
             if (in_array("task_deadline", $filter_values_array)) {
@@ -646,10 +646,10 @@ class Events extends Security_Controller {
             $status_reject = modal_anchor(get_uri("events/save_event_status/"), "<i data-feather='x-circle' class='icon-16'></i> " . app_lang('reject'), array("class" => "btn btn-danger float-start", "data-post-encrypted_event_id" => $encrypted_event_id, "title" => app_lang('event_details'), "data-post-status" => "rejected", "data-post-editable" => "1"));
 
             if (in_array($this->login_user->id, $confirmed_by_array)) {
-                $status = "<span class='badge' style='background-color:#5CB85C;' title=" . app_lang("event_status") . ">" . app_lang("confirmed") . "</span> ";
+                $status = "<span class='badge large' style='background-color:#5CB85C;' title=" . app_lang("event_status") . ">" . app_lang("confirmed") . "</span> ";
                 $status_button = $status_reject;
             } else if (in_array($this->login_user->id, $rejected_by_array)) {
-                $status = "<span class='badge' style='background-color:#D9534F;' title=" . app_lang("event_status") . ">" . app_lang("rejected") . "</span> ";
+                $status = "<span class='badge large' style='background-color:#D9534F;' title=" . app_lang("event_status") . ">" . app_lang("rejected") . "</span> ";
                 $status_button = $status_confirm;
             } else {
                 $status_button = $status_confirm . $status_reject;
@@ -756,8 +756,8 @@ class Events extends Security_Controller {
                 }
 
                 $calendar_ids_array = array_unique($calendar_ids_array);
-                $calendar_ids_array = clean_data($calendar_ids_array);
                 $calendar_ids_array = serialize($calendar_ids_array);
+                $calendar_ids_array = clean_data($calendar_ids_array);
 
                 $this->Settings_model->save_setting("user_" . $this->login_user->id . "_calendar_ids", $calendar_ids_array, "user");
             }
@@ -802,11 +802,10 @@ class Events extends Security_Controller {
 
     function reminders() {
         $this->can_create_reminders();
-        $view_data["project_id"] = get_only_numeric_value($this->request->getPost("project_id"));
-        $view_data["client_id"] = get_only_numeric_value($this->request->getPost("client_id"));
-        $view_data["lead_id"] = get_only_numeric_value($this->request->getPost("lead_id"));
-        $view_data["ticket_id"] = get_only_numeric_value($this->request->getPost("ticket_id"));
-        $view_data["related_user_id"] = get_only_numeric_value($this->request->getPost("related_user_id"));
+        $view_data["project_id"] = $this->request->getPost("project_id");
+        $view_data["client_id"] = $this->request->getPost("client_id");
+        $view_data["lead_id"] = $this->request->getPost("lead_id");
+        $view_data["ticket_id"] = $this->request->getPost("ticket_id");
         $view_data["reminder_view_type"] = $this->request->getPost("reminder_view_type");
         return $this->template->view("reminders/index", $view_data);
     }
@@ -839,7 +838,7 @@ class Events extends Security_Controller {
         echo json_encode(array("data" => $result));
     }
 
-    private function _make_reminder_row($data = array()) {
+    private function _make_reminder_row($data) {
         $reminder_status_value = "done";
 
         if ($data->reminder_status === "done" || $data->reminder_status === "shown") {
@@ -879,7 +878,9 @@ class Events extends Security_Controller {
         $missed_reminder_class = "";
         $local_time = get_my_local_time("Y-m-d H:i") . ":00";
 
-        if ($data->reminder_status === 'new' && ($data->start_date . ' ' . $data->start_time) < $local_time && $data->snoozing_time < $local_time && $data->next_recurring_time < $local_time) {
+        if ($data->reminder_status === 'new' && ($data->start_date . ' ' . $data->start_time) < $local_time && 
+            (empty($data->snoozing_time) || $data->snoozing_time < $local_time) && 
+            (empty($data->next_recurring_time) || $data->next_recurring_time < $local_time)) {
             $missed_reminder_class = "missed-reminder";
         }
 

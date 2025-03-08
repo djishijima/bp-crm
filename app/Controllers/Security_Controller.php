@@ -986,9 +986,12 @@ class Security_Controller extends App_Controller {
             return false;
         }
 
-        $settings = $this->Project_settings_model->get_all_where(array("project_id" => $project_id))->getResult();
+        $settings = $this->project_settings_model->get_all_where(array("project_id" => $project_id))->getResult();
         foreach ($settings as $setting) {
-            config('Rise')->app_settings_array[$setting->setting_name] = $setting->setting_value;
+            $app_settings = config('Rise');
+            $app_settings_array = isset($app_settings->app_settings_array) ? $app_settings->app_settings_array : [];
+            $app_settings_array[$setting->setting_name] = $setting->setting_value;
+            config('Rise')->app_settings_array = $app_settings_array;
         }
     }
 
